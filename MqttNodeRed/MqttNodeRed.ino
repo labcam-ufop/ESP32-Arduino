@@ -2,6 +2,9 @@
 #include <WiFi.h>
 #include <PubSubClient.h> // Biblioteca MQTT para fins educacionais
 
+// Macro para escolher entre simulação e hardware real
+#define SIMULATION_MODE 1  // 1 para simulação, 0 para hardware real
+
 // Configurações WiFi
 const char* ssid = "PICSimLabWifi";
 const char* password = "";
@@ -19,7 +22,7 @@ const char* mqtt_topic_status = "CAT341/status";
 WiFiClient espClient;
 WiFiServer server(80);
 
-// Cliente MQTT (simulado)
+// Cliente MQTT
 PubSubClient mqttClient(espClient);
 
 // Variáveis para controle de tempo
@@ -50,7 +53,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 }
 
-// Função para conectar/reconectar ao broker MQTT (simulada)
+// Função para conectar/reconectar ao broker MQTT
 void reconnect() {
   // Evita tentativas repetidas muito rápidas
   static unsigned long lastReconnectAttempt = 0;
@@ -67,18 +70,30 @@ void reconnect() {
     String clientId = "ESP32Client-";
     clientId += String(random(0xffff), HEX);
     
-    // Simula uma conexão bem-sucedida
-    mqttConnected = true;
-    Serial.println("Conectado ao broker MQTT!");
-    
-    // Publica mensagem de status
-    Serial.print("Publicando no tópico [");
-    Serial.print(mqtt_topic_status);
-    Serial.println("]: ESP32 online");
-    
-    // Inscreve no tópico de controle
-    Serial.print("Inscrito no tópico: ");
-    Serial.println(mqtt_topic_led);
+    // Tenta conectar
+    if (SIMULATION_MODE == 0 && mqttClient.connect(clientId.c_str())) {
+      mqttConnected = true;
+      Serial.println("Conectado ao broker MQTT!");
+      
+      // Publica mensagem de status
+      mqttClient.publish(mqtt_topic_status, "ESP32 online");
+      Serial.print("Publicando no topico [");
+      Serial.print(mqtt_topic_status);
+      Serial.println("]: ESP32 online");
+      
+      // Inscreve no tópico de controle
+      mqttClient.subscribe(mqtt_topic_led);
+      Serial.print("Inscrito no topico: ");
+      Serial.println(mqtt_topic_led);
+    } else if (SIMULATION_MODE == 1) {
+      // Em modo de simulação, apenas fingimos estar conectados
+      mqttConnected = true;
+      Serial.println("Simulando conexão MQTT!");
+    } else {
+      Serial.print("Falha na conexão MQTT, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" tentando novamente em 5 segundos");
+    }
   }
 }
 
@@ -104,21 +119,31 @@ void setup() {
   Serial.print("Endereço IP: ");
   Serial.println(WiFi.localIP());
   
-  // Configura o cliente MQTT (simulado)
+  // Configura o cliente MQTT
   mqttClient.setServer(mqtt_server, mqtt_port);
   mqttClient.setCallback(callback);
   
-  // Inicia o servidor web
+  // Inicia o servidor web (usado em ambos os modos para diagnóstico)
   server.begin();
   
   // Inicializa o gerador de números aleatórios
   randomSeed(micros());
+  
+  Serial.println(SIMULATION_MODE ? "Rodando em modo de SIMULAÇÃO" : "Rodando em modo de HARDWARE REAL");
 }
 
 void loop() {
-  // Verifica a conexão MQTT (simulado)
-  if (!mqttConnected) {
-    reconnect();
+  // Modo de hardware real: usa MQTT diretamente
+  if (SIMULATION_MODE == 0) {
+    if (!mqttClient.connected()) {
+      reconnect();
+    }
+    mqttClient.loop();
+  } else {
+    // Modo simulação: verifica a conexão MQTT simulada
+    if (!mqttConnected) {
+      reconnect();
+    }
   }
   
   // Publica uma mensagem de status a cada 30 segundos
@@ -130,14 +155,19 @@ void loop() {
     Serial.print("Publicando status: ");
     Serial.println(msg);
     
-    // Simulação de publicação MQTT
-    Serial.print("Publicando no tópico [");
-    Serial.print(mqtt_topic_status);
-    Serial.print("]: ");
-    Serial.println(msg);
+    if (SIMULATION_MODE == 0) {
+      // Publicação MQTT real
+      mqttClient.publish(mqtt_topic_status, msg);
+    } else {
+      // Simulação de publicação MQTT
+      Serial.print("Publicando no topico [");
+      Serial.print(mqtt_topic_status);
+      Serial.print("]: ");
+      Serial.println(msg);
+    }
   }
   
-  // Código do servidor web (esta parte é real e funciona com o simulador)
+  // Código do servidor web (esta parte funciona em ambos os modos)
   WiFiClient client = server.available();
   
   if (client) {
@@ -164,10 +194,10 @@ void loop() {
             client.println("</style></head><body>");
             client.println("<h1>ESP32 MQTT Demo</h1>");
             client.println("<p>Controle o LED pelo navegador ou via MQTT (test.mosquitto.org)</p>");
-            client.println("<a href=\"/H\"><button class=\"button\">LIGAR LED</button></a>");
-            client.println("<a href=\"/L\"><button class=\"button button-off\">DESLIGAR LED</button></a>");
-            client.println("<p>Tópico MQTT: CAT341/LEDControl</p>");
-            client.println("<p>Envie '1' para ligar, '2' para desligar</p>");
+            client.println("<a href=\"/LEDControl/1\"><button class=\"button\">LIGAR LED</button></a>");
+            client.println("<a href=\"/LEDControl/0\"><button class=\"button button-off\">DESLIGAR LED</button></a>");
+            client.println("<p>Topico MQTT: CAT341/LEDControl</p>");
+            client.println("<p>Envie '1' para ligar, '0' para desligar</p>");
             client.println("</body></html>");
             
             break;
@@ -178,24 +208,34 @@ void loop() {
           currentLine += c;
         }
         
-        // Processa comandos do servidor web
-        if (currentLine.endsWith("GET /H")) {
+        // Processa comandos do servidor web no formato MQTT-like
+        if (currentLine.endsWith("GET /LEDControl/1")) {
           digitalWrite(LedPin, HIGH);
           Serial.println("LED LIGADO via Web");
           
-          // Simula a publicação de uma mensagem MQTT quando o LED é ligado via web
-          Serial.print("Publicando no tópico [");
-          Serial.print(mqtt_topic_led);
-          Serial.println("]: 1");
+          if (SIMULATION_MODE == 0) {
+            // Publica mensagem MQTT real quando LED é ligado
+            mqttClient.publish(mqtt_topic_led, "1");
+          } else {
+            // Simula a publicação de uma mensagem MQTT
+            Serial.print("Publicando no topico [");
+            Serial.print(mqtt_topic_led);
+            Serial.println("]: 1");
+          }
         }
-        if (currentLine.endsWith("GET /L")) {
+        if (currentLine.endsWith("GET /LEDControl/0")) {
           digitalWrite(LedPin, LOW);
           Serial.println("LED DESLIGADO via Web");
           
-          // Simula a publicação de uma mensagem MQTT quando o LED é desligado via web
-          Serial.print("Publicando no tópico [");
-          Serial.print(mqtt_topic_led);
-          Serial.println("]: 2");
+          if (SIMULATION_MODE == 0) {
+            // Publica mensagem MQTT real quando LED é desligado
+            mqttClient.publish(mqtt_topic_led, "0");
+          } else {
+            // Simula a publicação de uma mensagem MQTT
+            Serial.print("Publicando no topico [");
+            Serial.print(mqtt_topic_led);
+            Serial.println("]: 0");
+          }
         }
       }
     }
