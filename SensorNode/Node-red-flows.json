@@ -1,0 +1,49 @@
+[
+    {
+        "id": "b1f11286a04b737f",
+        "type": "ui_button",
+        "z": "f6cbe525f3abe699",
+        "name": "",
+        "group": "ba25716da85dbe0c",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "label": "Desligar",
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "",
+        "payload": "0",
+        "payloadType": "str",
+        "topic": "topic",
+        "topicType": "msg",
+        "x": 420,
+        "y": 400,
+        "wires": [
+            [
+                "ce54eceb57e180c3"
+            ]
+        ]
+    },
+    {
+        "id": "ba25716da85dbe0c",
+        "type": "ui_group",
+        "name": "ESP32 Dashboard",
+        "tab": "0eb6d5efe4bf3fb2",
+        "order": 1,
+        "disp": true,
+        "width": 6,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "0eb6d5efe4bf3fb2",
+        "type": "ui_tab",
+        "name": "Home",
+        "icon": "dashboard",
+        "disabled": false,
+        "hidden": false
+    }
+]
