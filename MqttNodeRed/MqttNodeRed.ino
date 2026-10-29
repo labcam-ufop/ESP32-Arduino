@@ -3,11 +3,11 @@
 #include <PubSubClient.h> // Biblioteca MQTT para fins educacionais
 
 // Macro para escolher entre simulação e hardware real
-#define SIMULATION_MODE 1  // 1 para simulação, 0 para hardware real
+#define SIMULATION_MODE 0  // 1 para simulação, 0 para hardware real
 
 // Configurações WiFi
-const char* ssid = "PICSimLabWifi";
-const char* password = "";
+const char* ssid = "Alan Kardek";
+const char* password = "87651234";
 
 // Configurações MQTT
 const char* mqtt_server = "test.mosquitto.org";
